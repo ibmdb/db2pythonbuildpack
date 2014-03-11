@@ -30,6 +30,40 @@ PYTHON_EXE="/app/.heroku/python/bin/python"
 PIP_VERSION="1.3.1"
 DISTRIBUTE_VERSION="0.6.36"
 
+#Layout DB2 DS Driver client
+function check_and_layout_ibm_db_dependencies() {
+  echo "Checking for ibm_db module dependency"
+
+  cd $BUILD_DIR
+  exists=$(grep -c "ibm_db" requirements.txt)
+
+  if [ $exists -ne 0 ]; then
+    DB2_DIR="$BUILD_DIR"
+
+    PACKAGE_NAME="db2cli.tar.gz"
+
+    echo "Downloading IBM Data Server driver..."
+    curl "https://www.ng.bluemix.net/docs/Services/BluStratus/samples/clidriver.tgz" -s -o ${DB2_DIR}/clidriver.tgz
+
+    tar xzf ${DB2_DIR}/clidriver.tgz -C ${DB2_DIR}
+
+    #Delete the archive
+    rm -rf ${DB2_DIR}/clidriver.tgz
+
+    mv $DB2_DIR/clidriver .heroku/clidriver
+
+    export IBM_DB_HOME="$BUILD_DIR/.heroku/clidriver"
+  fi
+}
+
+function add_runtime_ibm_db_exports_to_profile() {
+  exists=$(grep -c "ibm_db" requirements.txt)
+  if [ $exists -ne 0 ]; then
+    echo "Setting LD_LIBRARY_PATH to IBM DataServer Driver lib in profile..."
+    set-env LD_LIBRARY_PATH /app/.heroku/clidriver/lib:$LD_LIBRARY_PATH
+  fi
+}
+
 # Setup bpwatch
 export PATH=$PATH:$ROOT_DIR/vendor/bpwatch
 LOGPLEX_KEY="t.b396af7f-ad75-4643-8b9e-ebb288acc624"
@@ -171,6 +205,8 @@ if [ "$FRESH_PYTHON" ] || [[ ! $(pip --version) == *$PIP_VERSION* ]]; then
   WORKING_DIR=$(pwd)
 
   bpwatch start prepare_environment
+  
+  check_and_layout_ibm_db_dependencies
 
   bpwatch start install_distribute
     # Prepare it for the real world
@@ -235,6 +271,7 @@ set-default-env LD_LIBRARY_PATH /app/.heroku/vendor/lib
 set-default-env LANG en_US.UTF-8
 set-default-env PYTHONHASHSEED random
 set-default-env PYTHONPATH /app/
+add_runtime_ibm_db_exports_to_profile
 
 
 # Experimental post_compile hook.
